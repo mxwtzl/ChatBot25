@@ -4,6 +4,8 @@
 This is a simple demo that shows how the API from https://chat-ai.academiccloud.de/v1 can be used. 
 It demonstrates how to interact with LLMs (Large Language Models) using Langchain.
 
+Alles Quatsch
+
 For further information about Chat-AI, please also refer to the [Chat-AI.MD](/Chat-AI.md) document.
 
 # Animalbot
