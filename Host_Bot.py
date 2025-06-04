@@ -1,10 +1,14 @@
-import getpass #Für sichere Passworteingabe
+import getpass
 import os
 import sys
 from typing import Any, Dict, List
-from langchain_core.runnables import RunnableLambda
-from langchain_core.prompts import PromptTemplate
-from langchain_core.messages import HumanMessage, AIMessage
+import json
+
+from langchain_core.output_parsers import StrOutputParser # wandelt Modellantwort standardisiert in String um
+from langchain_core.prompts import PromptTemplate # erstellt Prompt-Objekt hauptsächlich um Platzhalter füllbar zu machen
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage # ermöglicht strukturierte Aufteilung von Rollen
+from langchain_core.outputs import LLMResult # ermöglicht strukturierte Ausgabe von LLMs
+
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from langchain.callbacks.base import BaseCallbackHandler
@@ -14,7 +18,7 @@ if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 
-# API
+# API-Key laden
 load_dotenv()
 API_KEY = os.getenv("CHAT_AI_ACCESS_KEY")
 if not API_KEY:
@@ -23,14 +27,13 @@ if not API_KEY:
 # Callback zur Protokollierung
 class CustomCallback(BaseCallbackHandler):
     def __init__(self):
-        super().__init__()
         self.messages = {}
 
-    def on_llm_start(self, serialized: dict[str, Any], prompts: list[str], **kwargs: Any) -> None:
+    def on_llm_start(self, serialized: dict[str, Any], prompts: list[str], **kwargs: Any) -> Any:
         self.messages["on_llm_start_prompts"] = prompts
-        self.messages["on_llm_start_kwargs"] = kwargs # weitere Infos wie Modellname, Einstellungen ...
+        self.messages["on_llm_start_kwargs"] = kwargs
 
-    def on_llm_end(self, response: Any, **kwargs: Any) -> None:
+    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> Any:
         self.messages["on_llm_end_response"] = response
         self.messages["on_llm_end_kwargs"] = kwargs
 
@@ -40,10 +43,13 @@ class CustomCallback(BaseCallbackHandler):
 
 
 class BotAgent:
+
     STATE_UNCLE = "uncle"
     STATE_HOST = "host"
 
     def __init__(self):
+
+        # Initialisiere LLMs mit API-Key und Basis-URL
         self.llm = ChatOpenAI(
             model="llama-3.1-sauerkrautlm-70b-instruct",
             temperature=0.7,
@@ -52,6 +58,7 @@ class BotAgent:
             openai_api_base="https://chat-ai.academiccloud.de/v1",
         )
 
+        # Textklassifizierer für die Unterscheidung zwischen Onkel und Host
         self.text_classifier_llm = ChatOpenAI(
             model="meta-llama-3.1-8b-instruct",
             temperature=0.01,
@@ -60,14 +67,15 @@ class BotAgent:
             openai_api_base="https://chat-ai.academiccloud.de/v1",
         )
 
+        # Initialisiere den Zustand des Bots -> Host
         self.state = BotAgent.STATE_HOST
 
-        self.host_chain = self.create_prompt_chain(self.get_host_prompt())
-        self.uncle_chain = self.create_prompt_chain(self.get_uncle_prompt())
+        self.host_chain = self.get_host_prompt()
+        self.uncle_chain = self.get_uncle_prompt()
         self.text_classifier = self.create_text_classifier()
 
     def get_host_prompt(self):
-        return """
+        prompt = """
 Du bist ein menschlicher, neutraler Spielleiter in einem Rollenspiel in der Rolle des Gastgebers. Der Spieler führt ein schwieriges Gespräch mit einem populistischen Familienmitglied (dem Onkel). Du bist empathisch, reflektiert und hilfsbereit. Du beurteilst nicht direkt, sondern gibst Feedback auf Meta-Ebene.
 Beginne das Spiel mit einer freundlichen Begrüßung, indem du den Spieler bittest sich vorzustellen und fragst nach Namen, Geschlecht und wie anstrengend der Onkel sein kann, neben dem du ihn setzt. Anschließend sagst du, dass du dich in der Küche befindest und noch einige Vorbereitungen treffen musst und bei Bedarf (Hilfe, Pause, mehr Informationen) gerufen werden kannst.
 Wenn du aktiv wirst, tue Folgendes:
@@ -86,9 +94,12 @@ Bisherige Unterhaltung:
 Spieler sagt oder fragt:
 {player_input}
 """
+        # Umwandlung String -> Prompt
+        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
+        return chain
 
     def get_uncle_prompt(self):
-        return """
+        prompt = """
 Du spielst den Onkel beim Abendessen, der eine stark populistische Meinung vertritt. Du redest viel über "früher war alles besser", bist anti-woke und provozierst gerne. Rede ausschließlich in der Rolle des Onkels.
 
 Bisherige Unterhaltung:
@@ -97,14 +108,12 @@ Bisherige Unterhaltung:
 Spieler sagt oder fragt:
 {player_input}
 """
-
-    def create_prompt_chain(self, prompt_template: str):
-        prompt = PromptTemplate.from_template(prompt_template)
-        return prompt | self.llm | RunnableLambda(lambda x: x.content if hasattr(x, "content") else str(x))
+        # Umwandlung String -> Prompt
+        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
+        return chain
 
     def create_text_classifier(self):
-        prompt_template = PromptTemplate.from_template(
-            """
+        prompt = """
 Klassifiziere die folgende Eingabe in eine der Kategorien: [uncle, host].
 
 Eingabe:
@@ -112,33 +121,88 @@ Eingabe:
 
 Antwort:
 """
+        # Umwandlung String -> Prompt
+        chain = PromptTemplate.from_template(prompt) | self.text_classifier_llm | StrOutputParser()
+        return chain 
+
+    def classify_state(self, user_message: str):
+        classification_callback = CustomCallback()
+        text_classification = self.text_classifier.invoke(
+            user_message,
+            {"callbacks": [classification_callback], "stop_sequences": ["\n"]},
         )
-        return prompt_template | self.text_classifier_llm | RunnableLambda(lambda x: x.content.strip().lower())
+        
+        if text_classification.find("\n") > 0:
+            text_classification = text_classification[
+                0 : text_classification.find("\n")
+            ]
+        text_classification = text_classification.strip()
 
-    def classify_state(self, player_input: str):
-        result = self.text_classifier.invoke({"player_input": player_input})
-        if result in [BotAgent.STATE_UNCLE, BotAgent.STATE_HOST]:
-            self.state = result
-        return self.state
+        if text_classification == "uncle":
+            self.state = BotAgent.STATE_UNCLE
+        elif text_classification == "host":
+            self.state = BotAgent.STATE_HOST
 
-    def get_response(self, conversation_history: str, player_input: str, score: int = 50):
+        if text_classification in [BotAgent.STATE_UNCLE, BotAgent.STATE_HOST]:
+            self.state = text_classification
+        return text_classification, classification_callback
+
+    def get_response(self, user_message :str, chat_history: str, score: int = 50):
+        text_classification, classification_callback = self.classify_state(user_message)
         chain = self.host_chain if self.state == BotAgent.STATE_HOST else self.uncle_chain
-        response_callback = CustomCallback()
 
+        response_callback = CustomCallback()
         response = chain.invoke(
             {
-                "conversation_history": conversation_history,
-                "player_input": player_input,
+                "user_message": str(user_message),
+                "chat-history": str(chat_history),
                 "score": score,
             },
-            config={"callbacks": [response_callback]},
+            {"callbacks": [response_callback], "stop_sequences": ["\n"]},
         )
 
-        return {
-            "bot_response": response,
-            "log": response_callback.messages,
-            "state": self.state
+        log_message = {
+            "user_message": str(user_message),
+            "chatbot_response": str(response),
+            "agent_state": self.state,
+            "classification": {
+                "result": text_classification,
+                "llm_details": {
+                    key: value
+                    for key, value in classification_callback.messages.items()
+                },
+            },
+            "chatbot_response": {
+                key: value for key, value in response_callback.messages.items()
+            },
         }
+
+        return response, log_message
+    
+class LogWriter:
+
+    def __init__(self):
+        self.conversation_logfile = "conversation.jsonp"
+        if os.path.exists(self.conversation_logfile):
+            os.remove(self.conversation_logfile)
+
+    # helper function to make sure json encoding the data will work
+    def make_json_safe(self, value):
+        if type(value) == list:
+            return [self.make_json_safe(x) for x in value]
+        elif type(value) == dict:
+            return {key: self.make_json_safe(value) for key, value in value.items()}
+        try:
+            json.dumps(value)
+            return value
+        except TypeError as e:
+            return str(value)
+
+    def write(self, log_message):
+        with open(self.conversation_logfile, "a") as f:
+            f.write(json.dumps(self.make_json_safe(log_message), indent=2))
+            f.write("\n")
+            f.close()
 
 
 def test_bot_agent():
