@@ -146,7 +146,7 @@ def test_bot_agent():
 
     # Test 1: Initialer Zustand sollte der Host sein
     assert bot.state == BotAgent.STATE_HOST
-    print("Test 1: Initialer Zustand ist Host")p
+    print("Test 1: Initialer Zustand ist Host")
 
     # Test 2: Input klassifizieren
     input_uncle = "Früher war alles besser und die Flüchtlinge schaden uns!"
