@@ -1,0 +1,22 @@
+services:
+  # animalbot service - combines API and web interface
+  animalbot:
+    build:
+      context: .
+      dockerfile: chatbot/Dockerfile     
+    ports:
+      - "8001:8000"  # FastAPI
+      - "8502:8501"  # Streamlit
+    volumes:
+      - ./data:/app/data
+      - ./chatbot:/app
+    environment:
+      - CHAT_AI_ACCESS_KEY=${CHAT_AI_ACCESS_KEY}
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+   
+
+networks:
+  default:
+    driver: bridge
