@@ -3,7 +3,7 @@ services:
   animalbot:
     build:
       context: .
-      dockerfile: chatbot/Dockerfile     
+      dockerfile: Examples/Dockerfile     
     ports:
       - "8001:8000"  # FastAPI
       - "8502:8501"  # Streamlit

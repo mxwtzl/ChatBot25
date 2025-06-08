@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Python Version von 3.11 auf 3.13 geändert aufgrund von critical-high vulnerability
+FROM python:3.13-slim 
 
 WORKDIR /app
 
@@ -7,7 +8,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
-COPY chatbot/ .
+COPY Examples/ .
 
 # Create a non-root user and set up permissions
 RUN useradd -m dev && \
