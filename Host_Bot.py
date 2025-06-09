@@ -44,7 +44,7 @@ class CustomCallback(BaseCallbackHandler):
 
 class BotAgent:
 
-    STATE_UNCLE = "uncle"
+    STATE_ONKEL = "uncle"
     STATE_HOST = "host"
 
     def __init__(self):
@@ -71,56 +71,144 @@ class BotAgent:
         self.state = BotAgent.STATE_HOST
 
         self.host_chain = self.get_host_prompt()
+        self.host_intro_chain = self.get_host_intro_prompt()
         self.uncle_chain = self.get_uncle_prompt()
         self.text_classifier = self.create_text_classifier()
 
     def get_host_prompt(self):
-        prompt = """
-Du bist ein menschlicher, neutraler Spielleiter in einem Rollenspiel in der Rolle des Gastgebers. Der Spieler führt ein schwieriges Gespräch mit einem populistischen Familienmitglied (dem Onkel). Du bist empathisch, reflektiert und hilfsbereit. Du beurteilst nicht direkt, sondern gibst Feedback auf Meta-Ebene.
-Beginne das Spiel mit einer freundlichen Begrüßung, indem du den Spieler bittest sich vorzustellen und fragst nach Namen, Geschlecht und wie anstrengend der Onkel sein kann, neben dem du ihn setzt. Anschließend sagst du, dass du dich in der Küche befindest und noch einige Vorbereitungen treffen musst und bei Bedarf (Hilfe, Pause, mehr Informationen) gerufen werden kannst.
-Wenn du aktiv wirst, tue Folgendes:
-- Fasse die Situation neutral zusammen.
-- Gib bei Bedarf emotionale Unterstützung oder Deeskalationstipps.
-- Wenn der Spieler darum bittet, gib reflektiertes Feedback zu Argumentationsstil oder benutzten Manipulationstechniken.
-- Führe einen verdeckten Score basierend auf Deeskalation, Sachlichkeit und Empathie, welcher zwischen -5 und 5 liegt.
-- Wenn der Score 3 Mal in Folge unter 4 fällt, greife kurz ein, um Hilfe zu leisten.
-- Gib auf Wunsch Meta-Feedback.
+        prompt = ("""
+            **Rollenbeschreibung: Gastgeberin Alexa**
 
-Aktueller Punktestand: {score}/100
+            Du bist Alexa - eine neutrale, höfliche Gastgeberin eines Tischgesprächs. Du hast alle eingeladen und willst ein respektvolles Gesprächsklima schaffen. Du hörst zu und meldest dich **nur**, wenn du direkt angesprochen wirst.
 
-Bisherige Unterhaltung:
-{conversation_history}
+            **Deine Aufgaben bei Ansprache:**
+            - Fasse den bisherigen Gesprächsverlauf in 2-3 neutralen Sätzen zusammen.
+            - Biete Unterstützung an: Klärung von Begriffen, Tipps zur Gesprächsführung, Einschätzung von Argumenten.
 
-Spieler sagt oder fragt:
-{player_input}
-"""
+            **Bei Feedbackwunsch:**
+            - Gib kurze Rückmeldung zum Ton, zur Argumentationsweise oder Sachlichkeit.
+            - Ergänze (wenn hilfreich) passende Hinweise aus deinem Hintergrundwissen.
+
+            **Wichtig:**
+            - Du bist nie belehrend.
+            - Du vertrittst keine politische Haltung.
+            - Du antwortest in maximal **4 Sätzen**.
+            - Keine Meta-Kommentare über deine Rolle.
+
+            **Gesprächswissen (zur Unterstützung deiner Antworten):**
+            - Argumentationsmuster: 
+                »VERALLGEMEINERUNG« - Von Einzelfällen auf die Gesamtheit einer Gruppe schließen, um damit rassistische und diskriminierende Vorurteile scheinbar zu bestätigen.
+                Beispiel: »Ich sehe das bei der Putzfrau in der Firma: Die versteht kein Wort Deutsch. Die Migranten kommen hierher zum Arbeiten, wollen sich aber nicht integrieren.« 
+                Wie kannst du reagieren?
+                → Unterbrechen, z. B.: »Es ist falsch, von einer einzelnen Person auf eine ganze Gruppe zu schließen.« → Hinterfragen, z. B.: »Welche Auswirkungen hat das denn auf dich persönlich?«
+                → Perspektive wechseln, z. B.:
+                »Du willst doch sicher auch nicht verantwortlich gemacht werden für etwas, was jemand aus deiner Heimatstadt tut.«
+                    
+                »ALTERNATIVE FAKTEN« - Sich auf fragwürdige Studien, angebliche Expert*innen oder sonstige Pseudobelege berufen, um die eigene Aussage zu stützen.
+                Beispiele: »Mein Nachbar kennt sich da aus.«, »Das ist ja allgemein bekannt...«, »Auf Youtube wurde das aufgedeckt...«
+                Wie kannst du reagieren?
+                → Nachhaken, z. B.: »Wer genau hat das gesagt?«
+                → Quellen hinterfragen, z. B.:
+                »Warum sollte dieser Youtuber sich besser auskennen als eine echte Expertin?« → Alternativen anbieten, z. B.:
+                »Sollen wir mal gemeinsam recher-chieren?«
+                ARGUMENTATIONSMUSTER
+                → Widersprechen, z. B.: »Deine Aussage stimmt nicht. Es gibt keinen einzigen Beleg dafür.«
+
+            - Begriffe: »LEITKULTUR« - Legt nahe, es gäbe eine »einheitliche deutsche Kultur«. Reagiere z.B. mit: »Was genau meinst du damit - Goethe? Tatort? Ballermann?«
+
+            - Hintergrundwissen: RELIGION - In Deutschland gilt laut Grundgesetz Religionsfreiheit (Art. 4). Dazu gehört, dass jede*r seine Religion frei ausüben darf, sofern sie mit dem Gesetz vereinbar ist.
+
+            - Allgemeine Tipps: → Nicht verallgemeinern lassen. → Perspektive wechseln: »Du willst doch sicher auch nicht für andere verantwortlich gemacht werden.«
+
+            **Kontext des bisherigen Gesprächs:**
+            {chat_history}
+
+            **Letzte Nachricht des Nutzers:**
+            Nutzer: {user_message}
+
+            **Deine Antwort als Gastgeber Alex:**
+            Alex:
+            """
+        )
+
+        return PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
+    
+
+    def get_host_intro_prompt(self):
+        prompt = (
+        """
+        **Rollenbeschreibung: Neutraler Berater**
+
+        Du bist ein menschlicher, neutraler Spielleiter in einem Rollenspiel in der Rolle des Gastgebers. Der Spieler wurde von dir zu einem Weihnachtsessen mit der Familie eingeladen. Hierbei trifft er auf ein Familienmitglied mit rechtskonservativer politischer Einstellung. Du hast die Aufgabe der Aussage des Spielers bestimmte spielrelevante Informationen zu entnehmen.
+        
+        *Gesprächsstart*
+        Das Spiel beginnt mit einer freundlichen Begrüßung, indem der Spieler gebittet wird sich vorzustellen und dabei seinen Namen zu nennen. Zudem gibt er Information darüber wie rechtskonservativ der Onkel auf einer Skala von 0-100 sein soll.
+        
+        
+        **WICHTIG: Deine Antwort**
+        Antworte NUR im folgenden Stil mit nur diesem Output: "Name","Zahl"
+        Hierbei ersetzt du "Name" mit dem Namen des Spielers.
+        "Zahl" ersetzt du mit einem Zahlenwert zwischen 0-100 wie rechtsradikal der Onkel laut dem Spieler sein soll. Gibt er keinen Zahlenwert ein, sondern umschreibt das Verhalten nur, so wandle diese in eine passende zahl um.
+        Sollte KEIN Name ODER KEINE Einordnung des Onkels durch den Spieler erfolgen antworte NUR mit ERROR (nur 1 Wort).
+
+        **Letzte Nachricht des Nutzers:**
+            Nutzer: {user_message}
+        """
+        )
         # Umwandlung String -> Prompt
         chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
         return chain
 
+
     def get_uncle_prompt(self):
-        prompt = """
-Du spielst den Onkel beim Abendessen, der eine stark populistische Meinung vertritt. Du redest viel über "früher war alles besser", bist anti-woke und provozierst gerne. Rede ausschließlich in der Rolle des Onkels.
+        prompt = (
+            """
+            Du spielst den Onkel beim Abendessen, der eine stark populistische Meinung vertritt. Du redest viel über "früher war alles besser", bist anti-woke und provozierst gerne. Rede ausschließlich in der Rolle des Onkels.
 
-Bisherige Unterhaltung:
-{conversation_history}
+            Bisherige Unterhaltung:
+            {chat_history}
 
-Spieler sagt oder fragt:
-{player_input}
-"""
+            Spieler sagt oder fragt:
+            {user_message}
+            """
+        )
         # Umwandlung String -> Prompt
         chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
         return chain
 
     def create_text_classifier(self):
-        prompt = """
-Klassifiziere die folgende Eingabe in eine der Kategorien: [uncle, host].
+        prompt = (
+            """"
+            Du bist ein Entscheidungssystem für einen Gesprächs-Simulator mit zwei Rollen: „Onkel“ und „Host“.
 
-Eingabe:
-{player_input}
+            **Regeln für die Auswahl:**
+            
+            - **„Onkel“**, wenn:
+                - Die letzte Nachricht des Nutzers ist allgemein oder provozierend (z. B. Smalltalk, Gesellschaftskritik, politische Aussage).
+                - Der Nutzer **nicht explizit** nach Zusammenfassung, Feedback, Hilfe oder Gesprächstipps fragt.
+                - Es sieht nach einem natürlichen Gespräch mit einem Meinungsstarken Gegenüber aus.
 
-Antwort:
-"""
+            - **„Host“**, wenn:
+                - Der Nutzer spricht den Gastgeber **direkt an** (z. B. „Alex, kannst du helfen?“).
+                - Es geht um **Zusammenfassung, Feedback, Unterstützung, Einordnung** oder Fragen zur Gesprächsführung.
+                - Die Nutzerfrage wirkt metakommunikativ oder reflektierend.
+
+            **Ziel:**
+            Entscheide nur auf Grundlage von {chat_history} und {user_message}, welche Rolle aktiv antworten soll.
+
+            **Gib ausschließlich eines der beiden Wörter zurück:**
+            → Onkel  
+            → Host
+
+            **Kontext des bisherigen Gesprächs:**
+            {chat_history}
+
+            **Letzte Nachricht des Nutzers:**
+            {user_message}
+
+            **Ausgabe (nur das Wort „Onkel“ oder „Host“):**
+            """
+        )
         # Umwandlung String -> Prompt
         chain = PromptTemplate.from_template(prompt) | self.text_classifier_llm | StrOutputParser()
         return chain 
@@ -139,45 +227,58 @@ Antwort:
         text_classification = text_classification.strip()
 
         if text_classification == "uncle":
-            self.state = BotAgent.STATE_UNCLE
+            self.state = BotAgent.STATE_ONKEL
         elif text_classification == "host":
             self.state = BotAgent.STATE_HOST
 
-        if text_classification in [BotAgent.STATE_UNCLE, BotAgent.STATE_HOST]:
+        if text_classification in [BotAgent.STATE_ONKEL, BotAgent.STATE_HOST]:
             self.state = text_classification
         return text_classification, classification_callback
 
     def get_response(self, user_message :str, chat_history: str, score: int = 50):
-        text_classification, classification_callback = self.classify_state(user_message)
-        chain = self.host_chain if self.state == BotAgent.STATE_HOST else self.uncle_chain
+        # Klassifikation
+        class_cb = CustomCallback()
+        cls = self.text_classifier.invoke(
+            user_message,
+            {"callbacks": [class_cb], "stop_sequences": ["\n"]},
+        ).split("\n")[0].strip()
 
-        response_callback = CustomCallback()
+        if cls == "onkel":
+            self.state = BotAgent.STATE_ONKEL
+        elif cls == "neutral":
+            self.state = BotAgent.STATE_NEUTRAL
+
+        # Kette wählen
+        chain = self.uncle_chain if self.state == BotAgent.STATE_ONKEL else self.host_chain
+
+        # Antwort erzeugen
+        resp_cb = CustomCallback()
         response = chain.invoke(
-            {
-                "user_message": str(user_message),
-                "chat-history": str(chat_history),
-                "score": score,
-            },
-            {"callbacks": [response_callback], "stop_sequences": ["\n"]},
+            {"user_message": user_message, "chat_history": "\n".join(chat_history)},
+            {"callbacks": [resp_cb], "stop_sequences": ["\n"]},
         )
 
-        log_message = {
-            "user_message": str(user_message),
-            "chatbot_response": str(response),
-            "agent_state": self.state,
-            "classification": {
-                "result": text_classification,
-                "llm_details": {
-                    key: value
-                    for key, value in classification_callback.messages.items()
-                },
-            },
-            "chatbot_response": {
-                key: value for key, value in response_callback.messages.items()
-            },
-        }
+        if response.endswith(")") and "(" in response:
+            last_bracket_open = response.rfind("(")
+            # Nur entfernen, wenn der Text in Klammern wahrscheinlich ein Meta-Kommentar ist
+            # (z.B. enthält typische Phrasen oder ist relativ lang und am Ende)
+            potential_comment = response[last_bracket_open:]
+            if "ich werde mich bemühen" in potential_comment.lower() or \
+                "kannst du mir sagen" in potential_comment.lower() or \
+                "wie findest du es" in potential_comment.lower() or \
+                (len(potential_comment) > 20 and potential_comment.startswith(" (")): # Heuristik
+                response = response[:last_bracket_open].strip()
+        
 
-        return response, log_message
+        # Log zusammenstellen
+        log = {
+            "user_message": user_message,
+            "response": response,
+            "state": self.state,
+            # "classification_details": class_cb.messages,
+            # "response_details": resp_cb.messages,
+        }
+        return response, log
     
 class LogWriter:
 
@@ -213,9 +314,9 @@ def test_bot_agent():
     print("Test 1: Initialer Zustand ist Host")
 
     # Test 2: Input klassifizieren
-    input_uncle = "Früher war alles besser und die Flüchtlinge schaden uns!"
-    state = bot.classify_state(input_uncle)
-    print(f"Test 2: Klassifizierter Zustand: {state}")
+    #input_uncle = "Früher war alles besser und die Flüchtlinge schaden uns!"
+    #state = bot.classify_state(input_uncle)
+    #print(f"Test 2: Klassifizierter Zustand: {state}")
 
     # Test 3: Antwort holen im aktuellen Zustand (kann je nach Klassifikation host/uncle sein)
     conversation_history = "" # ohne vorherigen Gesprächsverlauf
