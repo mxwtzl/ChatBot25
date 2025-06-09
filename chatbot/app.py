@@ -5,7 +5,7 @@ import json
 # Konfiguration der Seite
 st.set_page_config(
     page_title="Uncle Bot",
-    page_icon="👨‍🦳",
+    page_icon="🤖",
     layout="centered"
 )
 
@@ -68,10 +68,13 @@ Welcome to the first version of the Uncle Bot!
 """)
 
 # Status-Anzeige
-state_emoji = "👩‍🦱" if st.session_state.current_state == "narrator" else "👨‍🦳"
-st.markdown(f"**Du sprichst mit:** {state_emoji}")
+NEUTRAL_AVATAR = "👩‍🦱"
+ONKEL_AVATAR = "👨‍🦳"
+state_emoji = "👩‍🦱" if st.session_state.current_state == "neutral" else "👨‍🦳"
+st.markdown(f"**You are talking to:** {state_emoji}")
 
 # Chat-Verlauf anzeigen
+# TO-DO: Anpassung damit state_emoji sich bei Änderung nicht für gesamten Verlauf anpasst
 for message in st.session_state.messages:
     with st.container():
         if message["role"] == "user":
@@ -82,17 +85,25 @@ for message in st.session_state.messages:
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.markdown(f"""
-            <div class="chat-message bot">
-                <div>{state_emoji} <b>Bot:</b></div>
-                <div>{message["content"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            if message["role"] == "neutral":
+                st.markdown(f"""
+                <div class="chat-message neutral">
+                        <div>{NEUTRAL_AVATAR} <b>Host:</b></div>
+                        <div>{message["content"]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="chat-message onkel">
+                    <div>{ONKEL_AVATAR} <b>Uncle:</b></div>
+                    <div>{message["content"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
 # Eingabefeld in einem Container
 with st.container():
     st.markdown('<div class="input-container">', unsafe_allow_html=True)
-    user_input = st.text_input("Deine Nachricht:", key=f"user_input_{st.session_state.input_key}")
+    user_input = st.text_input("Enter your message:", key=f"user_input_{st.session_state.input_key}")
     st.markdown('</div>', unsafe_allow_html=True)
 
 if user_input and user_input != st.session_state.last_input:
@@ -110,10 +121,16 @@ if user_input and user_input != st.session_state.last_input:
             }
         )
         response_data = response.json()
-        
-        # Bot-Antwort zum Chat-Verlauf hinzufügen
-        st.session_state.messages.append({"role": "bot", "content": response_data["response"]})
         st.session_state.current_state = response_data["state"]
+        # Bot Antwort zum Chat-Verlauf hinzufügen
+        # aktuelles Problem: Session-State hängt bei Anzeige immer hinter tatsächlichem Session-State zurück (erst bei zweiter Eingabe korrekt)
+        if st.session_state.current_state == "onkel":
+            st.session_state.messages.append({"role": "onkel", "content": response_data["response"]})
+        else:
+            st.session_state.messages.append({"role": "neutral", "content": response_data["response"]})
+        
+        # st.session_state.messages.append({"role": "neutral", "content": response_data["response"]})
+        # st.session_state.current_state = response_data["state"]
         
         # Eingabefeld leeren durch Erhöhung des Keys
         st.session_state.input_key += 1
