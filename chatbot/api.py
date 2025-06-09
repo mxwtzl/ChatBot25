@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from animalbot import AnimalAgent
+from Onkel_Bot import christmasAgent
 
 app = FastAPI()
 
@@ -15,8 +15,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Globale Instanz des AnimalAgent
-agent = AnimalAgent()
+# Globale Instanz des ChatAgent
+agent = christmasAgent()
 
 class ChatMessage(BaseModel):
     message: str

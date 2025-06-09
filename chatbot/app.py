@@ -4,8 +4,8 @@ import json
 
 # Konfiguration der Seite
 st.set_page_config(
-    page_title="Animal Chatbot",
-    page_icon="🐾",
+    page_title="Uncle Bot",
+    page_icon="👨‍🦳",
     layout="centered"
 )
 
@@ -55,22 +55,21 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "current_state" not in st.session_state:
-    st.session_state.current_state = "duck"
+    st.session_state.current_state = "onkel"
 if "last_input" not in st.session_state:
     st.session_state.last_input = ""
 if "input_key" not in st.session_state:
     st.session_state.input_key = 0
 
 # Titel und Beschreibung
-st.title("🐾 Animal Chatbot")
+st.title("Uncle Bot")
 st.markdown("""
-Chatte mit einem Fuchs oder einer Ente! 
-Sage einfach "Du bist ein Fuchs" oder "Du bist eine Ente" um den Charakter zu wechseln.
+Welcome to the first version of the Uncle Bot!
 """)
 
 # Status-Anzeige
-state_emoji = "🦊" if st.session_state.current_state == "fox" else "🦆"
-st.markdown(f"**Aktueller Charakter:** {state_emoji}")
+state_emoji = "👩‍🦱" if st.session_state.current_state == "narrator" else "👨‍🦳"
+st.markdown(f"**Du sprichst mit:** {state_emoji}")
 
 # Chat-Verlauf anzeigen
 for message in st.session_state.messages:
