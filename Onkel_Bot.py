@@ -9,7 +9,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.outputs import LLMResult
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
-from langchain.globals import set_verbose # NEU
+from langchain.globals import set_verbose
 
 # Warnungen unterdrücken
 if not sys.warnoptions:
@@ -17,7 +17,7 @@ if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
 
-set_verbose(False) # NEU: Langchain Verbosity global ausschalten
+set_verbose(False)  # Langchain Verbosity global ausschalten
 
 # .env laden
 load_dotenv()
@@ -52,11 +52,19 @@ class christmasAgent:
             openai_api_key=API_KEY,
             openai_api_base="https://chat-ai.academiccloud.de/v1",
         )
+        
+        ## NEU ##
+        # Sprache des Dialogs (Standard: Deutsch)
+        self.language = 'de' 
 
-        # Initialstatus: neutraler Erzähler
+        # Initialstatus: Der Onkel ist der erste Gesprächspartner nach der Spracheinleitung
         self.state = christmasAgent.STATE_ONKEL
         self.onkel_chain = self.create_onkel_chain()
         self.neutral_chain = self.create_neutral_chain()
+        
+        ## NEU ##
+        # Eine dedizierte Kette nur für die Übersetzung ins Englische
+        self.translator_chain = self.create_english_translator_chain()
 
         # Klassifikations-LLM für Modi-Wechsel
         self.text_classifier_llm = ChatOpenAI(
@@ -67,8 +75,7 @@ class christmasAgent:
             openai_api_base="https://chat-ai.academiccloud.de/v1",
         )
         self.text_classifier = self.create_text_classifier()
-    # Dieses Prompt repräsentiert das Onkel-Bot mit einer mittleren Schierigkeitsgrad und die Aussagen sind
-    # rechtskonservativ orientiert.
+
     def create_onkel_chain(self):
         prompt = (
             """
@@ -128,99 +135,161 @@ class christmasAgent:
 
     def create_neutral_chain(self):
         prompt = (
-            "Du bist der Host: sag der Nutzer, dass das Essen fast fertig ist.\n "
+            "Du bist der Erzähler: Sag dem Nutzer, dass das Essen fast fertig ist und er sich gedulden soll.\n"
             "Regeln:\n"
             "* Maximal 3 Sätze.\n"
             "* Keine Zeilenumbrüche.\n\n"
             "{chat_history}\nNutzer: {user_message}\nErzähler: "
         )
         return PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
+    
+    ## NEU ##
+    def create_english_translator_chain(self):
+        """Erstellt eine LLM-Kette, die deutschen Text ins Englische übersetzt."""
+        prompt_template = (
+            "Übersetze den folgenden deutschen Text exakt nach Englisch. "
+            "Gib NUR die englische Übersetzung aus, ohne zusätzliche Kommentare, Anführungszeichen oder Einleitungen wie 'Here is the translation:'.\n\n"
+            "Deutscher Text: \"{text}\"\n\n"
+            "Englische Übersetzung:"
+        )
+        prompt = PromptTemplate.from_template(prompt_template)
+        # Wir können denselben LLM für die Übersetzung verwenden
+        return prompt | self.llm | StrOutputParser()
 
     def create_text_classifier(self):
         prompt = (
-            "Klassifiziere, ob der Nutzer den Host (neutralen Erzähler) oder den Onkel verlangt.\n"
-            "Antwort mit 'neutral', 'onkel' oder 'none'.\n"
-            "- 'neutral' für ausdrückliche Host-Anfragen wie 'Hilfe', 'Ich will mit dem Host sprechen', 'Wo ist der Host'.\n"
-            "- 'onkel' für Rückkehr zur Onkel-Konversation bei Eingaben wie 'okay', 'okay vielen dank', 'das war es'.\n"
-            "- 'none' sonst.\n\n"
+            "Klassifiziere, ob der Nutzer den Erzähler (neutral) oder den Onkel verlangt.\n"
+            "Antworte nur mit 'neutral', 'onkel' oder 'none'.\n"
+            "- 'neutral' für explizite Anfragen nach dem Erzähler oder Hilfe, z.B. 'Hilfe', 'Ich will mit dem Erzähler sprechen', 'Wo ist der Host?'.\n"
+            "- 'onkel' für die Rückkehr zum Onkel, z.B. 'okay', 'danke', 'alles klar', 'das war es'.\n"
+            "- 'none' für alle anderen normalen Konversationsnachrichten.\n\n"
             "Nachricht: {message}\nKlassifikation: "
         )
         return PromptTemplate.from_template(prompt) | self.text_classifier_llm | StrOutputParser()
 
+    ## GEÄNDERT ##
     def get_response(self, user_message, chat_history):
-        # Klassifikation
+        # Klassifikation, um zu entscheiden, ob der Nutzer den Modus wechseln will
         class_cb = CustomCallback()
         cls = self.text_classifier.invoke(
-            user_message,
-            {"callbacks": [class_cb], "stop_sequences": ["\n"]},
-        ).split("\n")[0].strip()
+            {"message": user_message},
+            {"callbacks": [class_cb]},
+        ).strip().lower()
 
-        if cls == "onkel":
+        if "onkel" in cls:
             self.state = christmasAgent.STATE_ONKEL
-        elif cls == "neutral":
+        elif "neutral" in cls:
             self.state = christmasAgent.STATE_NEUTRAL
 
-        # Kette wählen
+        # Wähle die passende Kette basierend auf dem aktuellen Status
         chain = self.onkel_chain if self.state == christmasAgent.STATE_ONKEL else self.neutral_chain
 
-        # Antwort erzeugen
+        # Antwort auf Deutsch generieren
         resp_cb = CustomCallback()
-        response = chain.invoke(
+        german_response = chain.invoke(
             {"user_message": user_message, "chat_history": "\n".join(chat_history)},
-            {"callbacks": [resp_cb], "stop_sequences": ["\n"]},
+            {"callbacks": [resp_cb]},
         )
-
-        if response.endswith(")") and "(" in response:
-            last_bracket_open = response.rfind("(")
-            # Nur entfernen, wenn der Text in Klammern wahrscheinlich ein Meta-Kommentar ist
-            # (z.B. enthält typische Phrasen oder ist relativ lang und am Ende)
-            potential_comment = response[last_bracket_open:]
-            if "ich werde mich bemühen" in potential_comment.lower() or \
-                "kannst du mir sagen" in potential_comment.lower() or \
-                "wie findest du es" in potential_comment.lower() or \
-                (len(potential_comment) > 20 and potential_comment.startswith(" (")): # Heuristik
-                response = response[:last_bracket_open].strip()
         
-
+        # Heuristik zur Entfernung von Meta-Kommentaren in Klammern am Ende
+        if german_response.endswith(")") and "(" in german_response:
+            last_bracket_open = german_response.rfind("(")
+            potential_comment = german_response[last_bracket_open:]
+            if len(potential_comment) > 15: # Meta-Kommentare sind oft länger
+                german_response = german_response[:last_bracket_open].strip()
+        
         # Log zusammenstellen
         log = {
             "user_message": user_message,
-            "response": response,
             "state": self.state,
-            # "classification_details": class_cb.messages,
-            # "response_details": resp_cb.messages,
+            "original_response_de": german_response,
         }
-        return response, log
+
+        ## NEU ##
+        # Wenn die gewählte Sprache Englisch ist, übersetze die Antwort
+        if self.language == 'en':
+            translated_response = self.translator_chain.invoke({"text": german_response})
+            log["final_response_en"] = translated_response
+            return translated_response, log
+        else:
+            return german_response, log
 
 class LogWriter:
-    def __init__(self, filename="conversation.jsonp"):
+    def __init__(self, filename="conversation.jsonl"):
         self.file = filename
-        if os.path.exists(self.file): os.remove(self.file)
+        # Datei beim Start leeren
+        if os.path.exists(self.file):
+            os.remove(self.file)
 
     def make_json_safe(self, v):
         try:
             json.dumps(v)
             return v
-        except TypeError:
-            if isinstance(v, list): return [self.make_json_safe(x) for x in v]
-            if isinstance(v, dict): return {k: self.make_json_safe(val) for k,val in v.items()}
+        except (TypeError, OverflowError):
+            if isinstance(v, list):
+                return [self.make_json_safe(x) for x in v]
+            if isinstance(v, dict):
+                return {k: self.make_json_safe(val) for k, val in v.items()}
             return str(v)
 
     def write(self, log):
-        with open(self.file, "a") as f:
-            f.write(json.dumps(self.make_json_safe(log), indent=2) + "\n")
+        # Stellt sicher, dass die Datei im Append-Modus geöffnet wird
+        with open(self.file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(self.make_json_safe(log), indent=2, ensure_ascii=False) + "\n")
 
+## GEÄNDERT ##
 if __name__ == "__main__":
     agent = christmasAgent()
     history = []
     logger = LogWriter()
+    
+    # --- Start des Dialogs mit dem Erzähler zur Sprachwahl ---
+    print("\nErzähler: Hallo! Ich bin der neutrale Erzähler. Das Essen ist fast fertig.")
+    
     while True:
-        msg = input("User: ")
-        if msg.lower() in ["quit","exit","bye"]:
-            print("Goodbye!")
+        lang_choice = input("Erzähler: In welcher Sprache möchtest du das Gespräch führen? (Deutsch / Englisch)\n> ").strip().lower()
+        if lang_choice in ["deutsch", "de"]:
+            agent.language = 'de'
+            print("\nErzähler: Alles klar, wir fahren auf Deutsch fort. Onkel Gerhard wartet schon...")
             break
-        resp, lg = agent.get_response(msg, history)
-        print(("Onkel" if agent.state==agent.STATE_ONKEL else "Host") + ": " + resp)
-        history.append("User: " + msg)
-        history.append(("Uncle: " if agent.state==agent.STATE_ONKEL else "Host: ") + resp)
+        elif lang_choice in ["englisch", "english", "en"]:
+            agent.language = 'en'
+            print("\nNarrator: Alright, we will continue in English. Uncle Gerhard is already waiting...")
+            break
+        else:
+            print("Erzähler: Bitte gib 'Deutsch' oder 'Englisch' ein.")
+    
+    print("-" * 30)
+
+    # --- Haupt-Gesprächsschleife ---
+    while True:
+        # Passende Eingabeaufforderung basierend auf der Sprache
+        if agent.language == 'en':
+            prompt_text = "You: "
+            user_msg = input(prompt_text)
+            if user_msg.lower() in ["quit", "exit", "bye"]:
+                print("Narrator: Goodbye!")
+                break
+        else:
+            prompt_text = "Du: "
+            user_msg = input(prompt_text)
+            if user_msg.lower() in ["quit", "exit", "bye", "tschüss"]:
+                print("Erzähler: Auf Wiedersehen!")
+                break
+
+        resp, lg = agent.get_response(user_msg, history)
+        
+        # Passende Ausgabe der Persona basierend auf Sprache und Zustand
+        if agent.language == 'en':
+            persona = "Uncle" if agent.state == agent.STATE_ONKEL else "Narrator"
+        else:
+            persona = "Onkel" if agent.state == agent.STATE_ONKEL else "Erzähler"
+            
+        print(f"{persona}: {resp}")
+        
+        # Die interne Historie wird immer im deutschen Format gehalten,
+        # da die Prompts auf Deutsch sind. Wir verwenden die Original-Antwort aus dem Log.
+        history.append(f"Nutzer: {user_msg}")
+        history.append(f"{'Onkel' if agent.state==agent.STATE_ONKEL else 'Erzähler'}: {lg['original_response_de']}")
+        
         logger.write(lg)
