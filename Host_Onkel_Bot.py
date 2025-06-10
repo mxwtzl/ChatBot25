@@ -22,8 +22,8 @@ PROMPT_SUFFIX = """
 Folge diesen Regeln
 
 * Gib kurze Antworten, die maximal 3 oder 4 Sätze lang sind.
-* In der Antwort sollen keine Zeilenumbrüche genutzt werden.
-** Bleibe im Zustand Sonstiges bis der User den Onkel anspricht.
+* In der Antwort sollen keine "new lines" genutzt werden.
+** Wechsle niemals in den Zustand "KLINGEL", außer es ist dein Startzustand.
 * Nutze ansonsten Tools um deine Identität zu ändern wenn der Nutzer etwas sagt wie: 'Ich möchte mit dem Onkel sprechen' oder Gerhard (der Onkel) oder Alexa (den Host) direkt anspricht.
 * Nutze immer Markdown Anzeigeeigenschaften.
 
@@ -89,7 +89,7 @@ Du bist Alexa - eine neutrale, höfliche Gastgeberin eines Tischgesprächs. Du h
 
 """ + PROMPT_SUFFIX
 
-PROMPT_SONSTIGE = """
+PROMPT_KLINGEL = """
 **Ausgangssituation**:
 Der Chat mit dem User ist ein Spiel um Argumentationsstrategien zu trainieren.
 Es ist Weihnachten und der User wurde von Host Alexa eingeladen zum Abendessen vorbeizukommen. Zudem ist auch Onkel Gerhard da.
@@ -114,12 +114,22 @@ Onkel Gerhard stellt eine These auf die der Spieler entkräften soll. Hierbei mu
 *Start des Spiels*
 Das Spiel startet indem der user direkt Onkel Gerhard anspricht.
 
+** Bleibe im Zustand "KLINGEL" bis der User den Onkel anspricht.
+
 """ + PROMPT_SUFFIX
+
+PROMPT_ENGLISH = """
+Übersetze den folgenden deutschen Text exakt nach Englisch.
+Gib NUR die englische Übersetzung aus, ohne zusätzliche Kommentare, Anführungszeichen oder Einleitungen wie 'Here is the translation:'.\n\n
+Deutscher Text: \"{text}\"\n\n
+Englische Übersetzung:
+"""
 
 if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 
+set_verbose(False)
 load_dotenv()
 
 if not os.environ.get("OPENAI_API_KEY"):
@@ -128,7 +138,7 @@ if not os.environ.get("OPENAI_API_KEY"):
 class BotState(Enum):
     ONKEL = "onkel"
     HOST = "host"
-    SONSTIGE = "sonstige"
+    KLINGEL = "klingel"
 
 parser = EnumOutputParser(enum=BotState)
 
@@ -140,13 +150,11 @@ def ChangeState(
     """Analysiere die letzte Nachricht des Users und wechsle zu einem anderen bot state, wenn du entsprechend angesprochen oder darum gebeten wirst."""
     try:
         state_parsed = parser.invoke(bot_state)
-        console.print(Markdown(f"\n_State: Du bist {bot_state} namens {name}._\n"))
-        #chat_history ?
+        #console.print(Markdown(f"\n_State: Du bist {bot_state} namens {name}._\n"))
         chat_history.append(f'Bot Gedanke: Ist nun der {bot_state} named {name}')
     except:
         state_parsed = None
-        console.print(Markdown(f"\n_ERROR: Du bist nicht {bot_state} namens {name}._\n"))
-        #chat_history ?
+        #console.print(Markdown(f"\n_ERROR: Du bist nicht {bot_state} namens {name}._\n"))
         chat_history.append(f'Bot Gedanke: Wollte {bot_state} namens {name} werden, ist nun jedoch ein Vogel der nur noch trällert.')
     return state_parsed
 
@@ -159,6 +167,7 @@ class ChristmasAgent:
             openai_api_base="https://chat-ai.academiccloud.de/v1",
         )
 
+        self.language = "de"
         self.tools = [ChangeState]
 
         self.llm_classifier0 = ChatOpenAI(
@@ -169,14 +178,14 @@ class ChristmasAgent:
         )
         self.llm_classifier = self.llm_classifier0.bind_tools(self.tools)
 
-        self.state = BotState.SONSTIGE
+        self.state = BotState.KLINGEL
         self.prompts = {
             BotState.ONKEL: PROMPT_ONKEL,
             BotState.HOST: PROMPT_HOST,
-            BotState.SONSTIGE: PROMPT_SONSTIGE
+            BotState.KLINGEL: PROMPT_KLINGEL
         }
 
-    def get_response(self, user_message, chat_history):
+    def get_response(self, user_message, chat_history, round_count, user_id):
         chain = PromptTemplate.from_template(self.prompts[self.state]) | self.llm_classifier
 
         chatbot_response = chain.invoke(
@@ -193,17 +202,26 @@ class ChristmasAgent:
         if len(chatbot_response.tool_calls) > 0:
             chain = PromptTemplate.from_template(self.prompts[self.state]) | self.llm
 
-            chatbot_response = chain.invoke(
+            chatbot_response_de = chain.invoke(
                 {"user_message": user_message, "chat_history": chat_history}
             )
 
-        log_message = {
+        log = {
+            "user_id": user_id,
+            "state": self.state,
+            "round_count": round_count,
             "user_message": str(user_message),
-            "chatbot_response": str(chatbot_response.content),
-            "agent_state": self.state
+            "chatbot_response_de": str(chatbot_response.content)
         }
 
-        return chatbot_response.content, log_message
+        if self.language == "en":
+            chain = PromptTemplate.from_template(PROMPT_ENGLISH) | self.llm
+            chatbot_response = chain.invoke({"text": chatbot_response_de})
+            log["chatbot_response_en"] = chatbot_response
+        else:
+            chatbot_response = chatbot_response_de
+
+        return chatbot_response.content, log
 
 class LogWriter:
     def __init__(self):
@@ -234,19 +252,50 @@ if __name__ == "__main__":
 
     agent = ChristmasAgent()
     chat_history = []
-    log_writer = LogWriter()
+    logger = LogWriter()
+
+    round_count = 1
+
+    while True:
+        user_message = input("INIT: In welcher Sprache willst du das Gespräch führen? // In what language would you like to discuss? (deutsch/english): \n>")
+        if user_message.lower() in ["deutsch", "de", "german"]:
+            agent.language = "de"
+            user_id = input("INIT: Alles klar, wir fahren auf Deutsch fort. Bitte geben Sie Ihre Nutzer-ID ein: \n>")
+            break
+        elif user_message.lower() in ["englisch", "english", "en"]:
+            agent.language = "en"
+            user_id = input("Narrator: Alright, we will continue in English. Please enter your user-ID: \n>")
+            break
+    
+    if agent.language == "de":
+        console.print(Markdown(f'\n> Bot: Vielen Dank für diese Informationen. Beginne das Gespräch bitte in dem du an der Tür klingelst (z.B. "Ding Dong").\n'))
+    elif agent.language == "en":
+        console.print(Markdown(f'\n> Bot: Thanks for the information. Please start the conversation bei ringing the door (e.g. "ding dong").\n'))
 
     while True:
         user_message = input("User: ")
-        if user_message.lower() in ["quit", "exit", "bye"]:
-            print("Goodbye!")
+        if user_message.lower() in ["quit", "exit", "bye", "tschüss"]:
+            if agent.language == "de":
+                console.print(Markdown(f'\n> Bot: Auf Wiedersehen!.\n'))
+            else:
+                console.print(Markdown(f'\n> Bot: Goodbye!.\n'))
             break
 
-        chatbot_response, log_message = agent.get_response(user_message, chat_history)
+        chatbot_response, log_message = agent.get_response(user_message, chat_history, round_count, user_id)
         # print("Bot: " + chatbot_response)
-        console.print(Markdown(f'\n> Bot: {chatbot_response}\n'))
+        console.print(Markdown(f'\n> {agent.state}: {chatbot_response}\n'))
 
         chat_history.append("User: " + user_message)
         chat_history.append("Bot: " + chatbot_response)
 
-        log_writer.write(log_message)
+        logger.write(log_message)
+
+        if agent.state == BotState.ONKEL:
+            round_count += 1
+            if round_count >= 10:
+                if agent.language == "de":
+                    console.print(Markdown(f'\n> Bot: Die 10 Runden sind vorbei. Auf Wiedersehen!.\n'))
+                    break
+                elif agent.language == "en":
+                    console.print(Markdown(f'\n> Bot: The 10 rounds are over. Goodbye!.\n'))
+                    break
