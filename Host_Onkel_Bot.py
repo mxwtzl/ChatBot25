@@ -132,8 +132,9 @@ if not sys.warnoptions:
 set_verbose(False)
 load_dotenv()
 
-if not os.environ.get("OPENAI_API_KEY"):
-    os.environ["OPEN_API_KEY"] = getpass.getpass("Enter API key for OpenAI: ")
+API_KEY = os.getenv("CHAT_AI_ACCESS_KEY")
+if not API_KEY:
+    API_KEY = getpass.getpass("Enter your CHAT_AI_ACCESS_KEY: ")
 
 class BotState(Enum):
     ONKEL = "onkel"
