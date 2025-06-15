@@ -1,6 +1,13 @@
 import streamlit as st
 import requests
 import json
+import re
+
+# FastAPI endpoint URLs
+BASE_URL = "http://localhost:8000"
+SET_USERID_URL = f"{BASE_URL}/set-userid"
+SET_LANGUAGE_URL = f"{BASE_URL}/set-language"
+CHAT_URL = f"{BASE_URL}/chat"
 
 # Konfiguration der Seite
 st.set_page_config(
@@ -9,15 +16,13 @@ st.set_page_config(
     layout="centered"
 )
 
-# CSS für besseres Styling
+# CSS für Styling
 st.markdown("""
 <style>
-    /* Streamlit UI Elemente ausblenden */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stDeployButton {display: none;}
-    
     .stTextInput>div>div>input {
         background-color: #f0f2f6;
     }
@@ -32,7 +37,7 @@ st.markdown("""
         background-color: #2b313e;
         color: white;
     }
-    .chat-message.bot {
+    .chat-message.bot, .chat-message.neutral, .chat-message.onkel {
         background-color: #f0f2f6;
     }
     .chat-message .avatar {
@@ -51,90 +56,162 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialisierung des Session State
+# UserID Eingabe validieren
+# TO-DO: Eingabevalidierung auf unseren Use Case anpassen
+def validate_userid(userid: str) -> bool:
+    pattern = r"^[a-zA-Z0-9_]{3,20}$"
+    return bool(re.match(pattern, userid))
+
+# Session-State intitalisieren
+if "step" not in st.session_state:
+    st.session_state.step = "enter_userid"
+if "userid" not in st.session_state:
+    st.session_state.userid = None
+if "language" not in st.session_state:
+    st.session_state.language = "de"
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "current_state" not in st.session_state:
     st.session_state.current_state = "onkel"
+if "round_count" not in st.session_state:
+    st.session_state.round_count = 0
 if "last_input" not in st.session_state:
     st.session_state.last_input = ""
 if "input_key" not in st.session_state:
     st.session_state.input_key = 0
 
-# Titel und Beschreibung
+# Titel und Beschreibung 
 st.title("Uncle Bot")
-st.markdown("""
-Welcome to the first version of the Uncle Bot!
-""")
+st.markdown("Welcome to the first version of the Uncle Bot!")
 
-# Status-Anzeige
-NEUTRAL_AVATAR = "👩‍🦱"
-ONKEL_AVATAR = "👨‍🦳"
-state_emoji = "👩‍🦱" if st.session_state.current_state == "neutral" else "👨‍🦳"
-st.markdown(f"**You are talking to:** {state_emoji}")
-
-# Chat-Verlauf anzeigen
-# TO-DO: Anpassung damit state_emoji sich bei Änderung nicht für gesamten Verlauf anpasst
-for message in st.session_state.messages:
-    with st.container():
-        if message["role"] == "user":
-            st.markdown(f"""
-            <div class="chat-message user">
-                <div>👤 <b>Du:</b></div>
-                <div>{message["content"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
+# Eingabe der UserID
+if st.session_state.step == "enter_userid":
+    st.subheader("Enter Your User ID")
+    userid_input = st.text_input(
+        "User ID (3-20 alphanumeric characters or underscores):",
+        placeholder="e.g., john_doe_123"
+    )
+    if st.button("Submit User ID"):
+        if validate_userid(userid_input):
+            try:
+                response = requests.post(
+                    SET_USERID_URL,
+                    json={"userid": userid_input}
+                )
+                response.raise_for_status()
+                st.session_state.userid = userid_input
+                st.session_state.step = "select_language"
+                st.success(response.json().get("message"))
+                st.rerun()
+            except requests.RequestException as e:
+                st.error(f"Error setting user ID: {str(e)}")
         else:
-            if message["role"] == "neutral":
+            st.error("Invalid user ID. Use 3-20 alphanumeric characters or underscores.")
+
+# Sprachauswahl
+elif st.session_state.step == "select_language":
+    st.subheader("Select Language")
+    language = st.selectbox("Choose language:", ["Deutsch (de)", "English (en)"])
+    language_code = "de" if language.startswith("Deutsch") else "en"
+    if st.button("Submit Language"):
+        try:
+            response = requests.post(
+                SET_LANGUAGE_URL,
+                json={"userid": st.session_state.userid, "language": language_code}
+            )
+            response.raise_for_status()
+            st.session_state.language = language_code
+            st.session_state.step = "chat"
+            st.success(response.json().get("message"))
+            st.rerun()
+        except requests.RequestException as e:
+            st.error(f"Error setting language: {str(e)}")
+
+# Eigentlicher Chat
+elif st.session_state.step == "chat":
+    # Status display
+    NEUTRAL_AVATAR = "👩‍🦱"
+    ONKEL_AVATAR = "👨‍🦳"
+    state_emoji = NEUTRAL_AVATAR if st.session_state.current_state == "neutral" else ONKEL_AVATAR
+    persona = "Narrator" if st.session_state.current_state == "neutral" else "Uncle"
+    if st.session_state.language == "de":
+        persona = "Erzähler" if st.session_state.current_state == "neutral" else "Onkel Gerhard"
+        st.markdown(f"**Du sprichst mit:** {state_emoji} (Round: {st.session_state.round_count}/10)")    
+    else:
+        st.markdown(f"**You are talking to:** {state_emoji} (Round: {st.session_state.round_count}/10)")
+
+    # Chatverlauf ausgeben 
+    for message in st.session_state.messages:
+        with st.container():
+            if message["role"] == "user":
                 st.markdown(f"""
-                <div class="chat-message neutral">
-                        <div>{NEUTRAL_AVATAR} <b>Host:</b></div>
-                        <div>{message["content"]}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                <div class="chat-message user">
+                    <div>👤 <b>Du:</b></div>
+                    <div>{message["content"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
             else:
+                role_class = message["role"]
+                avatar = NEUTRAL_AVATAR if message["role"] == "neutral" else ONKEL_AVATAR
+                role_name = "Host" if message["role"] == "neutral" else "Uncle"
+                if st.session_state.language == "de":
+                    role_name = "Erzähler" if message["role"] == "neutral" else "Onkel Gerhard"
                 st.markdown(f"""
-                <div class="chat-message onkel">
-                    <div>{ONKEL_AVATAR} <b>Uncle:</b></div>
+                <div class="chat-message {role_class}">
+                    <div>{avatar} <b>{role_name}:</b></div>
                     <div>{message["content"]}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-# Eingabefeld in einem Container
-with st.container():
-    st.markdown('<div class="input-container">', unsafe_allow_html=True)
-    user_input = st.text_input("Enter your message:", key=f"user_input_{st.session_state.input_key}")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-if user_input and user_input != st.session_state.last_input:
-    # Nachricht zum Chat-Verlauf hinzufügen
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    st.session_state.last_input = user_input
-    
-    # API-Anfrage senden
-    try:
-        response = requests.post(
-            "http://localhost:8000/chat",
-            json={
-                "message": user_input,
-                "chat_history": [msg["content"] for msg in st.session_state.messages]
-            }
+    # Eingaben im Chat
+    with st.container():
+        st.markdown('<div class="input-container">', unsafe_allow_html=True)
+        user_input = st.text_input(
+            "Enter your message:",
+            key=f"user_input_{st.session_state.input_key}",
+            placeholder="Type your message here..."
         )
-        response_data = response.json()
-        st.session_state.current_state = response_data["state"]
-        # Bot Antwort zum Chat-Verlauf hinzufügen
-        # aktuelles Problem: Session-State hängt bei Anzeige immer hinter tatsächlichem Session-State zurück (erst bei zweiter Eingabe korrekt)
-        if st.session_state.current_state == "onkel":
-            st.session_state.messages.append({"role": "onkel", "content": response_data["response"]})
-        else:
-            st.session_state.messages.append({"role": "neutral", "content": response_data["response"]})
-        
-        # st.session_state.messages.append({"role": "neutral", "content": response_data["response"]})
-        # st.session_state.current_state = response_data["state"]
-        
-        # Eingabefeld leeren durch Erhöhung des Keys
-        st.session_state.input_key += 1
-        st.experimental_rerun()
-        
-    except Exception as e:
-        st.error(f"Fehler bei der Kommunikation mit dem Server: {str(e)}") 
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    if user_input and user_input != st.session_state.last_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        st.session_state.last_input = user_input
+
+        try:
+            response = requests.post(
+                CHAT_URL,
+                json={
+                    "message": user_input,
+                    "chat_history": [msg["content"] for msg in st.session_state.messages],
+                    "userid": st.session_state.userid,
+                    "language": st.session_state.language
+                }
+            )
+            response.raise_for_status()
+            response_data = response.json()
+
+            st.session_state.current_state = response_data["state"]
+            st.session_state.round_count = response_data["round_count"]
+
+            role = "neutral" if response_data["state"] == "neutral" else "onkel"
+            st.session_state.messages.append({
+                "role": role,
+                "content": response_data["response"]
+            })
+
+            if response_data["round_count"] >= 10 and response_data["state"] == "onkel":
+                st.warning("Conversation ended after 10 rounds. Start a new session.")
+                st.session_state.step = "enter_userid"
+                st.session_state.userid = None
+                st.session_state.language = "de"
+                st.session_state.messages = []
+                st.session_state.current_state = "onkel"
+                st.session_state.round_count = 0
+                st.session_state.input_key += 1
+                st.rerun()
+
+            st.session_state.input_key += 1
+            st.rerun()
+
+        except requests.RequestException as e:
+            st.error(f"Fehler bei der Kommunikation mit dem Server: {str(e)}")
