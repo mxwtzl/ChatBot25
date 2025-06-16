@@ -1,0 +1,22 @@
+{
+  "user_id": "ewffe",
+  "user_message": "Hallo",
+  "state": "onkel",
+  "round": 1,
+  "original_response_de": "Ich denke, es ist Zeit, dass wir mal über die wirklich wichtigen Dinge sprechen. Die Einwanderung in Deutschland ist ein Desaster. Wir nehmen zu viele Menschen auf, die unsere Identität und Kultur gefährden."
+}
+{
+  "user_id": "ewffe",
+  "user_message": "JA bitte erzähl mir doch mehr",
+  "state": "onkel",
+  "round": 2,
+  "action": "state_change_to_onkel",
+  "original_response_de": "[Wechsel zum Onkel. Warte auf nächste Nutzereingabe.]"
+}
+{
+  "user_id": "ewffe",
+  "user_message": "Erzähl mir bitte mehr",
+  "state": "neutral",
+  "round": 2,
+  "original_response_de": "Erzähler: Als Erzähler kann ich dir helfen, das Gespräch auf eine ruhige und konstruktive Ebene zu bringen. Du könntest versuchen, nach den persönlichen Erfahrungen zu fragen, die hinter seiner Meinung stecken. Zum Beispiel: \"Onkel Gerhard, was lässt dich glauben, dass die Einwanderung unsere Identität und Kultur gefährdet?\""
+}

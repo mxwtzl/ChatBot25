@@ -165,7 +165,7 @@ class christmasAgent:
             *   *Begrifssklärung:* "Was meinst du mit ...?"
             *   *Themenverlagerung (nur im Notfall):* "Du kannst vorschlagen, erstmal ein anderes Thema anzusprechen."
             
-            **Gute Beispiele für hilfreiche Antworten:**
+            **Gute Beispiele für hilfreiche Antworten (FEW-Shots):**
                 *   *Beispiel für eine gute Hilfe:* "Du könntest versuchen, nach den persönlichen Erfahrungen zu fragen, die hinter seiner Meinung stecken, um das Gespräch auf eine persönlichere Ebene zu lenken."
                 *   *Beispiel für eine gute Hilfe:* "Eine Möglichkeit wäre, einen gemeinsamen Wert zu finden. Zum Beispiel könntet ihr beide besorgt über die Sicherheit im Land sein, auch wenn ihr unterschiedliche Ursachen seht."
                 *   *Beispiel für eine gute Hilfe:* "Du könntest gezielt auf seine Wortwahl eingehen z.B. Du hast von Überfremdung gesprochen, was meinst du genau damit?"
@@ -182,6 +182,8 @@ class christmasAgent:
             *   Gib ausschließlich die direkte Rede des Erzählers aus. Füge keine Meta-Kommentare oder Erklärungen über deine Rolle hinzu.
             *   Halte deine Antworten sehr kurz und prägnant (maximal 3 Sätze).
             *   Vermeide Zeilenumbrüche.
+            *   Frage nach deiner Hilfestellung ob der Nutzer wieder mit dem Onkel reden will.
+
 
             **Bisheriger Chatverlauf:**
             {chat_history}
@@ -328,6 +330,7 @@ if __name__ == "__main__":
     console.print(Markdown(
         "> **Erzähler/Narrator:** Hallo! Ich bin der neutrale Erzähler. Das Essen ist fast fertig. // Hello! I am the neutral narrator. Dinner is almost ready.\n"))
 
+    #Sprachschleife
     while True:
         lang_choice = console.input(Markdown(
             "> **Erzähler:** In welcher Sprache möchtest du das Gespräch führen? (Deutsch / Englisch)\n> ")).strip().lower()
@@ -335,16 +338,43 @@ if __name__ == "__main__":
             agent.language = 'de'
             userid = console.input(Markdown(
                 "> **Erzähler:** Alles klar, wir fahren auf Deutsch fort. Bitte geben Sie Ihre Nutzer-ID ein.\n> ")).strip()
-            console.print(Markdown("> **Erzähler:** Supi. Onkel Gerhard wartet schon..."))
             break
         elif lang_choice in ["englisch", "english", "en"]:
             agent.language = 'en'
             userid = console.input(Markdown(
                 "> **Narrator:** Alright, we will continue in English. Please enter your user ID.\n> ")).strip()
-            console.print(Markdown("> **Narrator:** Perfect. Uncle Gerhard is already waiting..."))
             break
         else:
             console.print(Markdown("> **Erzähler:** Bitte gib 'Deutsch' oder 'Englisch' ein."))
+
+    #Schleife für Intro
+    while True:
+        if agent.language == 'de':
+            intro = console.input(Markdown(
+                "> **Erzähler:** Vielen dank! Möchtest du eine Spielanleitung erhalten? (ja/nein)\n> ")).strip().lower()
+            if intro == "ja":
+                console.print(Markdown(
+                    """> **Erzähler:** Du wurdest von Gastgeberin Alexa zum weihnachtlichen Abendessen eingeladen, bei dem auch Onkel Gerhard anwesend ist. 
+                    Er wird im Laufe des Abends provokante, politisch rechtskonservative Thesen äußern, auf die du höflich und argumentativ reagieren sollst.
+                    Wenn du nicht weiterweißt, kannst du Alexa jederzeit mit Stichwörtern wie „Hilfe“ oder „Alexa“ um Unterstützung bitten.
+                    Das Spiel beginnt, sobald du Onkel Gerhard direkt ansprichst."""))
+                break
+            elif intro == "nein":
+                console.print(Markdown("> **Erzähler:** Supi. Onkel Gerhard wartet schon..."))
+                break
+        if agent.language == 'en':
+            intro = console.input(Markdown(
+                "> **Narrator:** Thank you! Would you like to recieve a manual to the game? (yes/no)\n> ")).strip().lower()
+            if intro == "yes":
+                console.print(Markdown(
+                    """> **Narrator:** You've been invited by host Alexa to a Christmas dinner, where Uncle Gerhard will also be present. 
+                    Throughout the evening, he will voice provocative, politically conservative opinions that you are expected to respond to politely and with sound arguments.
+                    If you get stuck, you can ask Alexa for help at any time by using keywords like “help” or “Alexa.”
+                    The game begins as soon as you address Uncle Gerhard directly."""))
+                break
+            elif intro == "no":
+                console.print(Markdown("> **Narrator:** Perfect. Uncle Gerhard is already waiting..."))
+                break
 
     console.print(Markdown("> " + "-" * 30))
 
@@ -399,3 +429,6 @@ if __name__ == "__main__":
         history.append(f"Nutzer: {user_msg}")
         history.append(f"{persona}: {lg['original_response_de']}")  # Immer die deutsche Antwort für den Kontext loggen
         logger.write(lg)
+
+
+    
