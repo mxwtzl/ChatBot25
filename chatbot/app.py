@@ -4,6 +4,7 @@ import json
 import re
 
 # FastAPI endpoint URLs
+# TO-DO: Klären ob BASE_URL auch bei Deployment auf Server so funktioniert 
 BASE_URL = "http://localhost:8000"
 SET_USERID_URL = f"{BASE_URL}/set-userid"
 SET_LANGUAGE_URL = f"{BASE_URL}/set-language"
@@ -81,15 +82,16 @@ if "input_key" not in st.session_state:
     st.session_state.input_key = 0
 
 # Titel und Beschreibung 
-st.title("Uncle Bot")
-st.markdown("Welcome to the first version of the Uncle Bot!")
+# TO-DO: Anpassung damit Titel und Beschreibung auf Deutsch ODER Englisch angezeigt werden können
+st.title("Uncle Bot / Onkel Bot")
+st.markdown("Welcome to the first version of the Uncle Bot! / Willkomen zur ersten Version des Onkel Bot!")
 
 # Eingabe der UserID
 if st.session_state.step == "enter_userid":
-    st.subheader("Enter Your User ID")
+    st.subheader("Enter User ID")
     userid_input = st.text_input(
-        "User ID (3-20 alphanumeric characters or underscores):",
-        placeholder="e.g., john_doe_123"
+        "Pleaser Enter the User-ID provided in the PDF-File",
+        placeholder="Enter your User-ID here"
     )
     if st.button("Submit User ID"):
         if validate_userid(userid_input):
@@ -106,9 +108,10 @@ if st.session_state.step == "enter_userid":
             except requests.RequestException as e:
                 st.error(f"Error setting user ID: {str(e)}")
         else:
-            st.error("Invalid user ID. Use 3-20 alphanumeric characters or underscores.")
-
+            st.error("Invalid user ID.")
+    
 # Sprachauswahl
+# TO-DO: Sprachauswahl VOR UserID um Anzeigen auf Deutsch ODER Englisch ermöglichen 
 elif st.session_state.step == "select_language":
     st.subheader("Select Language")
     language = st.selectbox("Choose language:", ["Deutsch (de)", "English (en)"])
@@ -127,7 +130,7 @@ elif st.session_state.step == "select_language":
         except requests.RequestException as e:
             st.error(f"Error setting language: {str(e)}")
 
-# Eigentlicher Chat
+# Chat-Logik 
 elif st.session_state.step == "chat":
     # Status display
     NEUTRAL_AVATAR = "👩‍🦱"

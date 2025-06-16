@@ -16,15 +16,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Tracker der aktiven Sessions
 sessions: Dict[str, christmasAgent] = {}
 
 def validate_userid(userid: str) -> bool:
     pattern = r"^[a-zA-Z0-9_]{3,20}$"
     return bool(re.match(pattern, userid))
 
-def get_agent(userid: str = "anonymous"):
+def get_agent(userid: str):
     if not validate_userid(userid):
-        raise HTTPException(status_code=400, detail="Invalid userid: must be 3-20 alphanumeric characters or underscores")
+        raise HTTPException(status_code=400, detail="Invalid User-ID")
     if userid not in sessions:
         sessions[userid] = christmasAgent()
     return sessions[userid]
@@ -37,14 +38,14 @@ class SetUserIdRequest(BaseModel):
     userid: str
 
 class SetLanguageRequest(BaseModel):
-    userid: str = "anonymous"
+    userid: str 
     language: str
 
 class ChatMessage(BaseModel):
     message: str
     chat_history: List[str] = []
-    userid: str = "anonymous"
-    language: str = "de"
+    userid: str 
+    language: str 
 
 class ChatResponse(BaseModel):
     response: str
@@ -52,11 +53,12 @@ class ChatResponse(BaseModel):
     log_message: Dict[str, Any]
     round_count: int
 
+    
 @app.post("/set-userid")
 async def set_userid(request: SetUserIdRequest):
     try:
         if not validate_userid(request.userid):
-            raise HTTPException(status_code=400, detail="Invalid userid: must be 3-20 alphanumeric characters or underscores")
+            raise HTTPException(status_code=400, detail="Invalid User ID")
         sessions[request.userid] = christmasAgent()
         return {"message": f"User ID set to {request.userid}"}
     except Exception as e:
@@ -73,6 +75,7 @@ async def set_language(request: SetLanguageRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# TO-DO: Für Logging auch gewählte Sprache loggen
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_message: ChatMessage, agent: christmasAgent = Depends()):
     try:
