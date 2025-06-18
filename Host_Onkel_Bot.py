@@ -319,7 +319,6 @@ class LogWriter:
         with open(self.file, "a", encoding="utf-8") as f:
             f.write(json.dumps(self.make_json_safe(log), indent=2, ensure_ascii=False) + "\n")
 
-
 ## GEÄNDERT ##
 if __name__ == "__main__":
     agent = christmasAgent()
@@ -429,6 +428,3 @@ if __name__ == "__main__":
         history.append(f"Nutzer: {user_msg}")
         history.append(f"{persona}: {lg['original_response_de']}")  # Immer die deutsche Antwort für den Kontext loggen
         logger.write(lg)
-
-
-    
