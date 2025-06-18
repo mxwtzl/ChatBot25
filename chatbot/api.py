@@ -20,7 +20,7 @@ app.add_middleware(
 sessions: Dict[str, christmasAgent] = {}
 
 def validate_userid(userid: str) -> bool:
-    pattern = r"^[a-zA-Z0-9_]{3,20}$"
+    pattern = r"^[a-zA-Z0-9_]{10}$"
     return bool(re.match(pattern, userid))
 
 def get_agent(userid: str):
@@ -76,6 +76,7 @@ async def set_language(request: SetLanguageRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 # TO-DO: Für Logging auch gewählte Sprache loggen
+# TO-DO: Dafür sorgen dass Logs nicht mehr bei jedem Neustart überschrieben werden
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_message: ChatMessage, agent: christmasAgent = Depends()):
     try:

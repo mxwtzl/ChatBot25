@@ -202,7 +202,7 @@ class christmasAgent:
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # HIER IST DIE LÖSUNG IMPLEMENTIERT
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    def get_response(self, user_message, chat_history, userid="anonymous"):
+    def get_response(self, user_message, chat_history, userid):
         # 1. Check round limit
         if self.state == self.STATE_ONKEL and self.round_count >= 10:
             end_message = (
@@ -297,9 +297,6 @@ class christmasAgent:
 class LogWriter:
     def __init__(self, filename="conversation.jsonl"):
         self.file = filename
-        # Datei beim Start leeren
-        if os.path.exists(self.file):
-            os.remove(self.file)
 
     def make_json_safe(self, v):
         try:

@@ -60,7 +60,7 @@ st.markdown("""
 # UserID Eingabe validieren
 # TO-DO: Eingabevalidierung auf unseren Use Case anpassen
 def validate_userid(userid: str) -> bool:
-    pattern = r"^[a-zA-Z0-9_]{3,20}$"
+    pattern = r"^[a-zA-Z0-9_]{10}$"
     return bool(re.match(pattern, userid))
 
 # Session-State intitalisieren
@@ -88,12 +88,12 @@ st.markdown("Welcome to the first version of the Uncle Bot! / Willkomen zur erst
 
 # Eingabe der UserID
 if st.session_state.step == "enter_userid":
-    st.subheader("Enter User ID")
+    st.subheader("Enter User-ID / Eingabe User-ID")
     userid_input = st.text_input(
-        "Pleaser Enter the User-ID provided in the PDF-File",
-        placeholder="Enter your User-ID here"
+        "Pleaser Enter the User-ID provided in the PDF-File / Bitte gib die User-ID aus der PDF-Datei ein",
+        placeholder="Enter here / Hier eingeben"
     )
-    if st.button("Submit User ID"):
+    if st.button("Submit / Bestätigen"):
         if validate_userid(userid_input):
             try:
                 response = requests.post(
@@ -113,8 +113,8 @@ if st.session_state.step == "enter_userid":
 # Sprachauswahl
 # TO-DO: Sprachauswahl VOR UserID um Anzeigen auf Deutsch ODER Englisch ermöglichen 
 elif st.session_state.step == "select_language":
-    st.subheader("Select Language")
-    language = st.selectbox("Choose language:", ["Deutsch (de)", "English (en)"])
+    st.subheader("Select Language / Sprachauswahl")
+    language = st.selectbox("Choose language / Wähle Sprache:", ["Deutsch (de)", "English (en)"])
     language_code = "de" if language.startswith("Deutsch") else "en"
     if st.button("Submit Language"):
         try:
@@ -139,9 +139,9 @@ elif st.session_state.step == "chat":
     persona = "Narrator" if st.session_state.current_state == "neutral" else "Uncle"
     if st.session_state.language == "de":
         persona = "Erzähler" if st.session_state.current_state == "neutral" else "Onkel Gerhard"
-        st.markdown(f"**Du sprichst mit:** {state_emoji} (Round: {st.session_state.round_count}/10)")    
+        st.markdown(f"**Du sprichst mit:** {state_emoji} {persona} (Round: {st.session_state.round_count}/10)")    
     else:
-        st.markdown(f"**You are talking to:** {state_emoji} (Round: {st.session_state.round_count}/10)")
+        st.markdown(f"**You are talking to:** {state_emoji} {persona} (Round: {st.session_state.round_count}/10)")
 
     # Chatverlauf ausgeben 
     for message in st.session_state.messages:
@@ -169,11 +169,18 @@ elif st.session_state.step == "chat":
     # Eingaben im Chat
     with st.container():
         st.markdown('<div class="input-container">', unsafe_allow_html=True)
-        user_input = st.text_input(
-            "Enter your message:",
-            key=f"user_input_{st.session_state.input_key}",
-            placeholder="Type your message here..."
-        )
+        if st.session_state.language == "de":
+            user_input = st.text_input(
+                "Deine Nachricht:",
+                key=f"user_input_{st.session_state.input_key}",
+                placeholder="Gib deine Nachricht ein..."
+            )
+        else:
+            user_input = st.text_input(
+                "Enter your message:",
+                key=f"user_input_{st.session_state.input_key}",
+                placeholder="Type your message here..."
+            )
         st.markdown('</div>', unsafe_allow_html=True)
 
     if user_input and user_input != st.session_state.last_input:
