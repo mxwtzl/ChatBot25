@@ -297,6 +297,9 @@ class christmasAgent:
 class LogWriter:
     def __init__(self, filename="conversation.jsonl"):
         self.file = filename
+                # Datei beim Start leeren
+        if os.path.exists(self.file):
+            os.remove(self.file)
 
     def make_json_safe(self, v):
         try:
