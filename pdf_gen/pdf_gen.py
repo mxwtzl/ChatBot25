@@ -3,12 +3,18 @@ from pathlib import Path
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 import io
+import secrets
+import string
+
+def generate_user_token(length=10):
+    characters = string.ascii_letters + string.digits  # a-z, A-Z, 0-9
+    return ''.join(secrets.choice(characters) for _ in range(length))
 
 pdfpath = Path("D:/GitHub/ChatBot25_pdfgen/OnkelBot.pdf")
 output_path = Path("D:/GitHub/ChatBot25_pdfgen/OnkelBot_mit_token.pdf")
 
 # === User-ID einfügen ===
-user_id = "USER-123456"
+user_id = generate_user_token()
 
 # === Original-PDF laden ===
 reader = PdfReader(pdfpath)
